@@ -124,6 +124,9 @@ def _unitree_go2_amp_loco_base_env_cfg(
     # Effectively infinite episode length.
     cfg.episode_length_s = int(1e9)
 
+    twist_cmd = cfg.commands["twist"]
+    assert isinstance(twist_cmd, mdp.TurningVelocityCommandCfg)
+    twist_cmd.rel_turning_envs = 0.0
     cfg.observations["actor"].enable_corruption = False
     cfg.events.pop("push_robot", None)
     cfg.curriculum = {}
@@ -243,8 +246,8 @@ def unitree_go2_amp_rough_env_cfg(play: bool = False) -> AmpLocoEnvCfg:
     cfg.events = {"randomize_terrain": randomize_terrain, **cfg.events}
     twist_cmd = cfg.commands["twist"]
     assert isinstance(twist_cmd, UniformVelocityCommandCfg)
+    # Keep the trained yaw range: keyboard control uses these endpoints.
     twist_cmd.ranges.lin_vel_x = (-1.0, 1.0)
     twist_cmd.ranges.lin_vel_y = (-1.0, 1.0)
-    twist_cmd.ranges.ang_vel_z = (-2.0, 2.0)
 
   return cfg

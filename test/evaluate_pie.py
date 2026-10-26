@@ -62,7 +62,7 @@ def main(cfg: Config) -> None:
     camera_params = env_cfg.observations["camera"].terms["front_depth"].params
     for aug_key in (
         "noise_gaussian", "perlin_noise", "random_convolution",
-        "pixel_failure_zero", "pixel_failure_max",
+        "pixel_failure_zero",
     ):
         camera_params[aug_key] = None
     env_cfg.curriculum = {}

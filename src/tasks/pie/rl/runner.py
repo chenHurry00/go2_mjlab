@@ -52,11 +52,11 @@ class PIEOnPolicyRunner(MjlabOnPolicyRunner):
         key: depth.get(key)
         for key in (
           "noise_gaussian", "perlin_noise", "random_convolution",
-          "pixel_failure_zero", "pixel_failure_max",
+          "pixel_failure_zero",
         )
       }),
       "depth_augmentation_order": (
-        "gaussian,perlin,random-conv,zero-fail,max-fail "
+        "gaussian,perlin,random-conv,zero-fail "
         "(metric space, after blur, before clamp)"
       ),
       "depth_normalization": "clamp(depth_m,min_m,cutoff_m)/cutoff_m",

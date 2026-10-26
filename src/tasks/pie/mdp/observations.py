@@ -71,17 +71,16 @@ def camera_depth(
   perlin_noise: tuple[float, int] | None = None,
   random_convolution: int | None = None,
   pixel_failure_zero: float | None = None,
-  pixel_failure_max: float | None = None,
 ) -> torch.Tensor:
   """Return cropped/resized, normalized depth in ``(B, 1, H, W)`` layout.
 
   The optional arguments form a sim-to-real augmentation suite applied on
   metric depth, after the deterministic blur and before the final
   clamp/normalize, with independent draws per batch element and captured
-  frame.  Order: gaussian noise, Perlin noise, random convolution, zero/max
+  frame.  Order: gaussian noise, Perlin noise, random convolution, zero
   pixel failures.  Zero failures are lifted to ``min_depth`` by the clamp,
-  so they look maximally near; max failures saturate at the cutoff.  Keep
-  everything ``None`` for clean playback/eval.
+  so they look maximally near.  Keep everything ``None`` for clean
+  playback/eval.
   """
   sensor: CameraSensor = env.scene[sensor_name]
   depth = sensor.data.depth
@@ -166,11 +165,6 @@ def camera_depth(
       raise ValueError("Zero pixel failure probability must be in [0, 1).")
     failed = torch.rand_like(depth) < pixel_failure_zero
     depth = torch.where(failed, torch.zeros_like(depth), depth)
-  if pixel_failure_max is not None:
-    if not 0.0 <= pixel_failure_max < 1.0:
-      raise ValueError("Max pixel failure probability must be in [0, 1).")
-    failed = torch.rand_like(depth) < pixel_failure_max
-    depth = torch.where(failed, torch.full_like(depth, cutoff_distance), depth)
   return depth.clamp(min=min_depth, max=cutoff_distance) / cutoff_distance
 
 
@@ -207,7 +201,6 @@ class DepthHistory(ManagerTermBase):
     perlin_noise: tuple[float, int] | None = None,
     random_convolution: int | None = None,
     pixel_failure_zero: float | None = None,
-    pixel_failure_max: float | None = None,
     frame_history_length: int = 2,
     update_period_steps: int = 5,
   ) -> torch.Tensor:
@@ -236,7 +229,6 @@ class DepthHistory(ManagerTermBase):
         perlin_noise=perlin_noise,
         random_convolution=random_convolution,
         pixel_failure_zero=pixel_failure_zero,
-        pixel_failure_max=pixel_failure_max,
       )
 
       if self._history is None:

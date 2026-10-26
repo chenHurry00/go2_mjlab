@@ -371,7 +371,7 @@ class KeyboardCommandEnv:
             key: params.get(key)
             for key in (
                 "noise_gaussian", "perlin_noise", "random_convolution",
-                "pixel_failure_zero", "pixel_failure_max",
+                "pixel_failure_zero",
             )
             if params.get(key) is not None
         }

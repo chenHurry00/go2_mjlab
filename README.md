@@ -51,6 +51,15 @@ python scripts/train.py Unitree-Go2-AMP-Loco --gpu-ids '[0]' --env.scene.num-env
 python scripts/train.py Unitree-Go2-AMP-Rough --gpu-ids '[0]' --env.scene.num-envs 4096 --agent.run-name amp_rough
 python scripts/train.py Unitree-Go2-PIE --gpu-ids '[0]' --env.scene.num-envs 128 --agent.run-name pie
 ```
+
+AMP training samples 25% in-place turning commands, 5% standing commands, and
+70% ordinary walking commands. In-place turns hold zero XY velocity and a
+constant yaw rate until resampling, with equal probability of either direction
+and a magnitude of 0.2–1.0 rad/s. Adjust these with
+`--env.commands.twist.rel-turning-envs` and
+`--env.commands.twist.turning-velocity-range`; the turning fraction is disabled
+for playback. Existing checkpoints need further training to learn this behavior.
+
 <details>
 <summary><b>Script arguments</b></summary>
 
