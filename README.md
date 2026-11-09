@@ -33,6 +33,9 @@ pip install -e .
 | --- | --- |
 | `Unitree-Go2-Flat` | Velocity tracking on flat terrain |
 | `Unitree-Go2-Rough` | Velocity tracking on rough terrain |
+| `Unitree-Go2-MoE-CTS` | Reference-aligned concurrent teacher/student training with an 8-expert student encoder |
+| `Unitree-Go2-MoE-CTS-BoxStairs` | Optional vertical-wall stairs validation task |
+| `Unitree-Go2-MoE-CTS-RGAlign` | Experimental RoboGauge limits/contact alignment; joint fine-tuning regressed and was stopped |
 | `Unitree-Go2-AMP-Loco` | Flat velocity tracking with AMP style rewards |
 | `Unitree-Go2-AMP-Rough` | AMP locomotion on generated rough terrain with critic-only scan |
 | `Unitree-Go2-PIE` | Recurrent depth-based locomotion on flat terrain and stairs |
@@ -104,6 +107,32 @@ PIE uses two depth frames, ten steps of proprioception and a GRU. It defaults
 to 128 training environments to limit visual rollout memory. See
 [PIE training, validation and deployment](src/tasks/pie/README.md) for the observation
 contract, recurrent ONNX inputs, smoke checks and visual ablations.
+
+### MoE-CTS
+
+The task ports `go2_rl_gym@30e74dc` MoE-CTS to mjlab: 45-value actor observations,
+263-value privileged observations, five-frame history and an eight-expert student.
+It supports one process/GPU and retains the wide joint limits with
+`pyramidal`, `impratio=1`. BoxStairs and RGAlign are optional experimental variants.
+
+```bash
+# Select the GPU appropriate for your machine.
+CUDA_VISIBLE_DEVICES=1 python "scripts/train.py" Unitree-Go2-MoE-CTS --env.scene.num-envs 8192 --agent.run-name moe_cts
+CUDA_VISIBLE_DEVICES=1 python "scripts/play.py" Unitree-Go2-MoE-CTS --checkpoint-file "/path/to/model_110000.pt" --num-envs 1 --command '(0.8, 0.0, 0.0)'
+```
+
+Training requires an exact teacher/student split and nonempty minibatches.
+The rollout, velocity command and reward-weight curricula must use matching
+`num_steps_per_env` values (default 24). Single-environment playback is supported.
+Training exports a JIT policy accepting one 45-value frame, maintaining history
+internally and returning `(action, (expert_weights, latent))`; call `reset()`
+between episodes. Checkpoints and videos remain outside Git under `logs/`.
+
+The seed-42 110k policy scored 0.6500 versus 0.6693 for the published 137k policy
+under the same RoboGauge evaluation. This is a single-seed simulation baseline;
+self-collision settings, stair collision geometry and PhysX/MuJoCo dynamics
+differ from the published model's training conditions. Multi-seed and real-robot
+performance have not been established.
 
 ## Other scripts
 

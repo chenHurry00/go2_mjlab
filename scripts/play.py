@@ -329,10 +329,13 @@ class KeyboardCommandEnv:
             for name, shape in zip(names, manager.group_obs_term_dim[group], strict=True):
                 width = int(np.prod(shape))
                 term = manager.get_term_cfg(group, name)
-                if term.params.get("command_name") == self._command_name and name == "command":
+                if term.params.get("command_name") == self._command_name and name in ("command", "velocity_command"):
                     if not term.flatten_history_dim:
                         raise ValueError("Keyboard commands require flattened observation histories.")
-                    value = self._command
+                    value = (
+                        term.func(self._env.unwrapped, **term.params)
+                        if name == "velocity_command" else self._command
+                    )
                     if term.scale is not None:
                         value = value * term.scale
                     observations[group][:, offset + width - 3:offset + width] = value
@@ -460,6 +463,14 @@ class PlayConfig:
 
 def _keyboard_command_limits(env_cfg: Any, command_name: str) -> np.ndarray:
     command_cfg = env_cfg.commands.get(command_name)
+    from src.tasks.go2_moe_cts.mdp.commands import RefVelocityCommandCfg
+
+    if isinstance(command_cfg, RefVelocityCommandCfg):
+        command_cfg.resampling_time_range = (1.0e9, 1.0e9)
+        ranges = command_cfg.ranges
+        return np.asarray(
+            [ranges.lin_vel_x, ranges.lin_vel_y, ranges.ang_vel_yaw], dtype=np.float32
+        )
     if command_cfg is None or not all(
         hasattr(command_cfg, field)
         for field in ("ranges", "heading_command", "rel_standing_envs")
@@ -549,28 +560,38 @@ def run_play(task_id: str, cfg: PlayConfig) -> None:
     vec_env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
     runner_cls = load_runner_cls(task_id) or MjlabOnPolicyRunner
     runner = runner_cls(vec_env, asdict(agent_cfg), device=device)
-    runner.load(
-        str(checkpoint_path), load_cfg={"actor": True}, strict=True, map_location=device
-    )
+    from src.tasks.go2_moe_cts.rl import MoECtsRunner
+
+    if isinstance(runner, MoECtsRunner):
+        runner.load(str(checkpoint_path), load_optimizer=False)
+    else:
+        runner.load(
+            str(checkpoint_path), load_cfg={"actor": True}, strict=True, map_location=device
+        )
     policy = runner.get_inference_policy(device=device)
 
-    onnx_path = log_dir / "policy.onnx"
-    runner.export_policy_to_onnx(str(log_dir), filename="policy.onnx")
-    if hasattr(runner, "get_policy_metadata"):
-        metadata = runner.get_policy_metadata(str(log_dir))
+    if isinstance(runner, MoECtsRunner):
+        jit_path = log_dir / "jit_models" / "policy_jit_play.pt"
+        runner.export_jit(str(jit_path))
+        print(f"[INFO] Exported history-aware JIT policy to {jit_path}")
     else:
-        actor_obs_cfg = env_cfg.observations["actor"]
-        metadata = get_base_metadata(vec_env.unwrapped, str(log_dir))
-        metadata.update(
-            {
-                "observation_history_layout": (
-                    "term-major" if actor_obs_cfg.flatten_history_dim else "frame-major"
-                ),
-                "observation_history_length": str(actor_obs_cfg.history_length),
-            }
-        )
-    attach_metadata_to_onnx(str(onnx_path), metadata)
-    print(f"[INFO] Exported ONNX policy to {onnx_path}")
+        onnx_path = log_dir / "policy.onnx"
+        runner.export_policy_to_onnx(str(log_dir), filename="policy.onnx")
+        if hasattr(runner, "get_policy_metadata"):
+            metadata = runner.get_policy_metadata(str(log_dir))
+        else:
+            actor_obs_cfg = env_cfg.observations["actor"]
+            metadata = get_base_metadata(vec_env.unwrapped, str(log_dir))
+            metadata.update(
+                {
+                    "observation_history_layout": (
+                        "term-major" if actor_obs_cfg.flatten_history_dim else "frame-major"
+                    ),
+                    "observation_history_length": str(actor_obs_cfg.history_length),
+                }
+            )
+        attach_metadata_to_onnx(str(onnx_path), metadata)
+        print(f"[INFO] Exported ONNX policy to {onnx_path}")
 
     window = (
         KeyboardController(cmd_limits if cfg.keyboard else None, depth=cfg.depth)
